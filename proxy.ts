@@ -1,7 +1,7 @@
 import { auth } from "@/app/auth";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const session = await auth();
   const allowedEmails = (process.env.ALLOWED_EMAILS || "").split(",").map(email => email.trim());
 
