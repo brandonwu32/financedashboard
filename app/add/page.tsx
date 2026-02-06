@@ -30,8 +30,15 @@ export default function AddExpensePage() {
       return;
     }
 
+    const formatDateForSheet = (isoDate: string) => {
+      if (!isoDate) return "";
+      const [year, month, day] = isoDate.split("-");
+      // Format as M/D/YYYY (no leading zeros) to match upload statement format
+      return `${parseInt(month, 10)}/${parseInt(day, 10)}/${year}`;
+    };
+
     const tx: Transaction = {
-      date: manualDate,
+      date: formatDateForSheet(manualDate),
       description: manualDescription,
       amount: amountNum,
       category: manualCategory || "Uncategorized",
