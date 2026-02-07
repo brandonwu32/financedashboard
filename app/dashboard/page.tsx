@@ -7,8 +7,10 @@ import useSWR from "swr";
 import DashboardLayout from "@/app/ui/dashboard/layout";
 import ExpenseOverview from "@/app/ui/dashboard/expense-overview";
 import BudgetMeter from "@/app/ui/dashboard/budget-meter";
-import SpendingChart from "@/app/ui/dashboard/spending-chart";
+import RevenueClient from "@/app/ui/dashboard/revenue-client";
 import RecentTransactions from "@/app/ui/dashboard/recent-transactions";
+import { PeriodProvider } from "@/app/ui/dashboard/period-context";
+import PeriodSelector from "@/app/ui/dashboard/period-selector";
 import { Transaction } from "@/app/lib/google-sheets";
 
 export default function Dashboard() {
@@ -39,6 +41,14 @@ export default function Dashboard() {
   }, [status, router]);
 
   useEffect(() => {
+    // If the API explicitly reports the user is not onboarded, redirect to
+    // the onboarding flow. Otherwise set an error when transactions are
+    // missing.
+    if (data && data.onboarded === false) {
+      router.push("/new-user");
+      return;
+    }
+
     if (data && !data.transactions) {
       setError("Failed to load transactions");
     } else {
@@ -62,22 +72,28 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 sm:space-y-8">
-        {error && (
-          <div className="rounded-md bg-red-50 p-3 sm:p-4">
-            <p className="text-xs sm:text-sm text-red-700">{error}</p>
+      <PeriodProvider>
+        <div className="space-y-6 sm:space-y-8">
+          <div className="flex items-center justify-end">
+            <PeriodSelector />
           </div>
-        )}
 
-        <ExpenseOverview transactions={transactions} />
+          {error && (
+            <div className="rounded-md bg-red-50 p-3 sm:p-4">
+              <p className="text-xs sm:text-sm text-red-700">{error}</p>
+            </div>
+          )}
 
-        <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
-          <BudgetMeter transactions={transactions} />
-          <SpendingChart transactions={transactions} />
+          <ExpenseOverview transactions={transactions} />
+
+          <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
+            <BudgetMeter transactions={transactions} />
+            <RevenueClient transactions={transactions} />
+          </div>
+
+          <RecentTransactions transactions={transactions} />
         </div>
-
-        <RecentTransactions transactions={transactions} />
-      </div>
+      </PeriodProvider>
     </DashboardLayout>
   );
 }

@@ -25,8 +25,8 @@ export async function parseTransactionsFromImage(
     const currentYear = new Date().getFullYear();
     const prompt = `You are an expert at parsing financial documents and bank statements. 
     
-Analyze this bank statement or transaction screenshot and extract all transactions. For each transaction, extract:
-- Date (in YYYY-MM-DD format)
+  Analyze this bank statement or transaction screenshot and extract all transactions. For each transaction, extract:
+    - Date (in MM/DD/YYYY format)
 - Description/Merchant name
 - Amount (as a positive number)
 - Category (choose from: Discretionary, Restaurant, Grocery, and default to discretionary if unclear)
@@ -87,11 +87,53 @@ Be thorough and extract ALL transactions visible in the image. If amounts are un
 
     const parsedData = JSON.parse(jsonMatch[0]) as ParsedTransactionData;
 
-    // Filter by cutoff date if provided
+    // Normalize dates to MM/DD/YYYY for consistent preview and downstream
+    // behavior. Accept common incoming formats like YYYY-MM-DD or MM/DD/YYYY.
+    const normalizeToMMDDYYYY = (d: string) => {
+      if (!d) return '';
+      const s = d.toString().trim();
+      // If already MM/DD/YYYY or M/D/YYYY
+      if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(s)) return s;
+      // YYYY-MM-DD
+      const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (ymd) {
+        const [, y, m, day] = ymd;
+        return `${String(m).padStart(2,'0')}/${String(day).padStart(2,'0')}/${y}`;
+      }
+      // Try Date parse
+      const parsed = new Date(s);
+      if (!isNaN(parsed.getTime())) {
+        const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+        const dd = String(parsed.getDate()).padStart(2, '0');
+        const yyyy = String(parsed.getFullYear());
+        return `${mm}/${dd}/${yyyy}`;
+      }
+      return s;
+    };
+
+    // Apply normalization
+    parsedData.transactions = parsedData.transactions.map((t) => ({
+      ...t,
+      date: normalizeToMMDDYYYY(t.date),
+    }));
+
+    // Filter by cutoff date if provided (attempt to parse cutoffDate)
     if (cutoffDate) {
-      parsedData.transactions = parsedData.transactions.filter(
-        (t) => new Date(t.date) >= new Date(cutoffDate)
-      );
+      const cutoff = new Date(cutoffDate);
+      parsedData.transactions = parsedData.transactions.filter((t) => {
+        const parts = t.date.split(/\D+/).filter(Boolean);
+        let dt: Date;
+        if (parts.length >= 3) {
+          // MM DD YYYY
+          const mm = Number(parts[0]);
+          const dd = Number(parts[1]);
+          const yy = Number(parts[2]);
+          dt = new Date(yy, mm - 1, dd);
+        } else {
+          dt = new Date(t.date);
+        }
+        return dt >= cutoff;
+      });
     }
 
     return parsedData;

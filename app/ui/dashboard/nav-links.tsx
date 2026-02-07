@@ -4,6 +4,10 @@ import {
   DocumentDuplicateIcon,
   PlusCircleIcon,
 } from '@heroicons/react/24/outline';
+import dynamic from 'next/dynamic';
+
+// Load the NewUserLink client component dynamically to avoid SSR issues
+const NewUserLink = dynamic(() => import('./new-user-link'), { ssr: false });
 
 // Primary navigation links
 const primaryLinks = [
@@ -47,6 +51,11 @@ export default function NavLinks() {
           </a>
         );
       })}
+
+      {/* Conditional New User link (client-only) */}
+      <div className="mt-4 md:mt-6">
+        <NewUserLink />
+      </div>
     </>
   );
 }

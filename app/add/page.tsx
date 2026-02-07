@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import DashboardLayout from "@/app/ui/dashboard/layout";
 import { Transaction } from "@/app/lib/google-sheets";
 import { mutate } from "swr";
@@ -14,10 +15,25 @@ export default function AddExpensePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const router = useRouter();
 
   const handleAddManual = async () => {
     if (saving) return;
     setError(null);
+
+    // Check onboarding status first — if user is not onboarded, redirect to onboarding
+    try {
+      const statusRes = await fetch("/api/onboarding/status");
+      const statusJson = await statusRes.json().catch(() => ({}));
+      if (!statusRes.ok || statusJson.onboarded === false) {
+        router.push("/new-user");
+        return;
+      }
+    } catch (e) {
+      // If the check fails, redirect to onboarding as a safe fallback
+      router.push("/new-user");
+      return;
+    }
 
     if (!manualDate || !manualDescription || !manualAmount) {
       setError("Please fill out date, description, and amount.");

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/auth";
-import { getBudgets, updateBudgets } from "@/app/lib/google-sheets";
+import { getBudgets, updateBudgets, getRegistryEntry } from "@/app/lib/google-sheets";
 
 export async function GET() {
   try {
@@ -10,7 +10,12 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const budgets = await getBudgets();
+    const entry = await getRegistryEntry(session.user.email!);
+    if (!entry || !entry.sheetId) {
+      return NextResponse.json({ error: 'Not onboarded', onboarded: false }, { status: 403 });
+    }
+
+    const budgets = await getBudgets(entry.sheetId);
 
     return NextResponse.json({ budgets });
   } catch (error) {
@@ -39,7 +44,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await updateBudgets(budgets);
+    const entry = await getRegistryEntry(session.user.email!);
+    if (!entry || !entry.sheetId) {
+      return NextResponse.json({ error: 'Not onboarded', onboarded: false }, { status: 403 });
+    }
+
+    await updateBudgets(budgets, entry.sheetId);
 
     return NextResponse.json({ success: true, budgets });
   } catch (error) {

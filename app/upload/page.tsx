@@ -18,12 +18,34 @@ export default function UploadPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [onboarding, setOnboarding] = useState<null | { allowed: boolean; onboarded: boolean }>(null);
+  const [onboardingLoading, setOnboardingLoading] = useState(true);
+  const isSaveDisabled = saving || (onboarding ? !onboarding.onboarded : false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
     }
   }, [status, router]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/onboarding/status");
+        if (!mounted) return;
+        const json = await res.json().catch(() => ({}));
+        setOnboarding({ allowed: Boolean(json.allowed), onboarded: Boolean(json.onboarded) });
+      } catch (e) {
+        if (!mounted) return;
+        setOnboarding({ allowed: false, onboarded: false });
+      } finally {
+        if (mounted) setOnboardingLoading(false);
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -80,6 +102,21 @@ export default function UploadPage() {
     setError(null);
 
     try {
+      // Re-check onboarding briefly before attempting save
+      try {
+        const statusRes = await fetch("/api/onboarding/status");
+        const statusJson = await statusRes.json().catch(() => ({}));
+        if (!statusRes.ok || statusJson.onboarded === false) {
+          // Instead of navigating immediately (which previously caused 404s for some users),
+          // show the new-user page via client navigation so user can follow the onboarding flow.
+          router.push("/new-user");
+          return;
+        }
+      } catch (e) {
+        router.push("/new-user");
+        return;
+      }
+
       const response = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -314,13 +351,20 @@ export default function UploadPage() {
             </div>
 
             <div className="mt-6 flex gap-3 sm:gap-4 flex-col sm:flex-row">
-                <button
-                  onClick={handleSaveToSheet}
-                  disabled={saving}
-                  className={`flex-1 ${saving ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white py-2 px-4 rounded-lg font-medium transition text-sm sm:text-base`}
-                >
-                  {saving ? 'Saving...' : 'Save to Google Sheet'}
-                </button>
+                <div className="flex-1">
+                  <button
+                    onClick={handleSaveToSheet}
+                    disabled={isSaveDisabled}
+                    className={`w-full ${isSaveDisabled ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white py-2 px-4 rounded-lg font-medium transition text-sm sm:text-base`}
+                  >
+                    {saving ? 'Saving...' : 'Save to Google Sheet'}
+                  </button>
+                  {!onboardingLoading && onboarding && !onboarding.onboarded && (
+                    <div className="mt-2 text-sm text-yellow-700">
+                      <p>You don't have a personal sheet yet. <a href="/new-user" className="underline font-medium">Create your sheet</a> to enable saving.</p>
+                    </div>
+                  )}
+                </div>
               <button
                 onClick={() => {
                   setShowPreview(false);

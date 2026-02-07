@@ -2,7 +2,13 @@
 
 import { Transaction } from "@/app/lib/google-sheets";
 import { useMemo, useEffect, useState } from "react";
-import { getCurrentBiWeeklyPeriod, filterTransactionsByPeriod } from "@/app/lib/bi-weekly";
+import {
+  getCurrentSpendingPeriod,
+  getCurrentPeriod,
+  filterTransactionsBySpendingPeriod,
+  deriveBudgetForPeriod,
+} from "@/app/lib/spending";
+import { usePeriod } from "@/app/ui/dashboard/period-context";
 
 export default function BudgetMeter({
   transactions,
@@ -30,8 +36,9 @@ export default function BudgetMeter({
     fetchBudgets();
   }, []);
 
-  const currentPeriod = getCurrentBiWeeklyPeriod();
-  const periodTransactions = filterTransactionsByPeriod(transactions, currentPeriod);
+  const { periodType } = usePeriod();
+  const currentPeriod = getCurrentPeriod(periodType);
+  const periodTransactions = filterTransactionsBySpendingPeriod(transactions, currentPeriod);
 
   const categorySpending = useMemo(() => {
     const spending: Record<string, number> = {};
@@ -47,6 +54,15 @@ export default function BudgetMeter({
   const topCategories = Object.entries(categorySpending)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 5);
+  // derive budgets for the selected period (spreadsheet stores weekly budgets)
+  const derivedBudgets = useMemo(() => {
+    const out: Record<string, number> = {};
+    Object.entries(budgets).forEach(([k, v]) => {
+      const num = Number(v) || 0;
+      out[k] = deriveBudgetForPeriod(num, periodType);
+    });
+    return out;
+  }, [budgets, periodType]);
 
   if (loading) {
     return (
@@ -64,7 +80,7 @@ export default function BudgetMeter({
 
       <div className="space-y-4 sm:space-y-6">
         {topCategories.map(([category, spent]) => {
-          const budget = budgets[category] || 500;
+          const budget = derivedBudgets[category] || 500;
           const percentage = (spent / budget) * 100;
           const isOver = spent > budget;
 

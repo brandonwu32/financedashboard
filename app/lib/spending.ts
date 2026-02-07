@@ -3,7 +3,7 @@
  * User gets paid on Fridays, so tracking period is Saturday after payday to Friday of payday
  */
 
-export interface BiWeeklyPeriod {
+export interface SpendingPeriod {
   startDate: Date;
   endDate: Date;
   label: string;
@@ -15,7 +15,7 @@ export interface BiWeeklyPeriod {
  * @param lastPayday Date of the last payday (Friday)
  * @returns Array of bi-weekly periods
  */
-export function getBiWeeklyPeriods(lastPayday: Date = new Date(2026, 0, 30)): BiWeeklyPeriod[] {
+export function getSpendingPeriods(lastPayday: Date = new Date(2026, 0, 30)): SpendingPeriod[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -30,7 +30,7 @@ export function getBiWeeklyPeriods(lastPayday: Date = new Date(2026, 0, 30)): Bi
   const daysToAdd = dayOfWeek === 5 ? 1 : (6 - dayOfWeek + 7) % 7;
   nextSaturday.setDate(nextSaturday.getDate() + daysToAdd);
 
-  const periods: BiWeeklyPeriod[] = [];
+  const periods: SpendingPeriod[] = [];
 
   // Generate periods: 2 in the past, current, and 2 in the future
   for (let i = -2; i <= 2; i++) {
@@ -58,10 +58,56 @@ export function getBiWeeklyPeriods(lastPayday: Date = new Date(2026, 0, 30)): Bi
 /**
  * Get the current bi-weekly period
  */
-export function getCurrentBiWeeklyPeriod(lastPayday: Date = new Date(2026, 0, 30)): BiWeeklyPeriod {
-  const periods = getBiWeeklyPeriods(lastPayday);
+export function getCurrentSpendingPeriod(lastPayday: Date = new Date(2026, 0, 30)): SpendingPeriod {
+  const periods = getSpendingPeriods(lastPayday);
   const current = periods.find((p) => p.isCurrentPeriod);
   return current || periods[2]; // Default to middle period if not found
+}
+
+/**
+ * Get the current period based on a period type.
+ * Supports 'weekly', 'biweekly', 'monthly', 'yearly'.
+ */
+export function getCurrentPeriod(periodType: 'weekly' | 'biweekly' | 'monthly' | 'yearly' = 'weekly') {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let startDate: Date;
+  let endDate: Date;
+  let label = "";
+
+  if (periodType === 'monthly') {
+    startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // last day of month
+    label = startDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  } else if (periodType === 'yearly') {
+    startDate = new Date(today.getFullYear(), 0, 1);
+    endDate = new Date(today.getFullYear(), 11, 31);
+    label = `${today.getFullYear()}`;
+  } else if (periodType === 'biweekly') {
+    // Use the bi-weekly logic: find the most recent Saturday that begins the period
+    // We'll reuse getSpendingPeriods to find the current biweekly period
+    const cur = getCurrentSpendingPeriod();
+    startDate = cur.startDate;
+    endDate = cur.endDate;
+    label = cur.label;
+  } else {
+    // weekly: start on Sunday and end on Saturday
+    const day = today.getDay();
+    startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - day);
+    endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+    const sLabel = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const eLabel = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    label = `${sLabel} - ${eLabel}`;
+  }
+
+  return {
+    startDate,
+    endDate,
+    label,
+    isCurrentPeriod: true,
+  } as SpendingPeriod;
 }
 
 /**
@@ -81,11 +127,11 @@ function formatPeriodLabel(startDate: Date, endDate: Date): string {
 }
 
 /**
- * Filter transactions for a specific bi-weekly period
+ * Filter transactions for a specific spending period
  */
-export function filterTransactionsByPeriod(
+export function filterTransactionsBySpendingPeriod(
   transactions: any[],
-  period: BiWeeklyPeriod
+  period: SpendingPeriod
 ): any[] {
   const parseDate = (dateStr: string): Date | null => {
     if (!dateStr) return null;
@@ -130,4 +176,27 @@ export function filterTransactionsByPeriod(
     parsed.setHours(0, 0, 0, 0);
     return parsed >= period.startDate && parsed <= period.endDate;
   });
+}
+
+/**
+ * Derive a budget value for a given periodType from a weekly budget value.
+ * @param weeklyBudget number weekly budget (base)
+ * @param periodType 'weekly'|'biweekly'|'monthly'|'yearly'
+ */
+export function deriveBudgetForPeriod(weeklyBudget: number, periodType: string = 'weekly') {
+  const weekly = Number(weeklyBudget) || 0;
+  switch (periodType) {
+    case 'biweekly':
+    case 'bi-weekly':
+      return weekly * 2;
+    case 'monthly':
+      // approximate monthly from weekly: 52 weeks / 12 months
+      return weekly * (52 / 12);
+    case 'yearly':
+    case 'annual':
+      return weekly * 52;
+    case 'weekly':
+    default:
+      return weekly;
+  }
 }
