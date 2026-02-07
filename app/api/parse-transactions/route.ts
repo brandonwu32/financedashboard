@@ -26,6 +26,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate file types
+    const ALLOWED_MIME_TYPES = [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "application/pdf",
+    ];
+
+    for (const file of files) {
+      if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+        return NextResponse.json(
+          {
+            error: `Invalid file type: ${file.name}. Only JPEG, PNG, GIF, and PDF files are allowed.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Parse transactions from images
     const parsedData = await parseMultipleImages(files, creditCard, cutoffDate);
 

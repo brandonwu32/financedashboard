@@ -9,6 +9,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [budgets, setBudgets] = useState<Record<string, number>>({});
+  const [sheetId, setSheetId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -29,6 +30,7 @@ export default function SettingsPage() {
         if (response.ok) {
           const data = await response.json();
           setBudgets(data.budgets || {});
+          setSheetId(data.sheetId || null);
         } else {
           setError("Failed to load budgets");
         }
@@ -170,6 +172,19 @@ export default function SettingsPage() {
               </label>
               <p className="mt-1 text-sm sm:text-base text-gray-900 break-all">{session.user.email}</p>
             </div>
+            {sheetId && (
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700">
+                  Sheet ID
+                </label>
+                <p className="mt-1 text-sm sm:text-base text-gray-900 break-all font-mono bg-gray-50 p-2 rounded border border-gray-200">
+                  {sheetId}
+                </p>
+                <p className="mt-2 text-xs text-gray-500">
+                  This is your Google Sheet ID used to store transactions and budgets.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -92,9 +92,12 @@ export function getCurrentPeriod(periodType: 'weekly' | 'biweekly' | 'monthly' |
     endDate = cur.endDate;
     label = cur.label;
   } else {
-    // weekly: start on Sunday and end on Saturday
+    // weekly: start on Saturday and end on Friday
     const day = today.getDay();
-    startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - day);
+    // day 0 (Sunday) to day 6 (Saturday)
+    // We want Saturday (6) to be the start, so go back (day - 6 + 7) % 7 days
+    const daysToSubtract = (day - 6 + 7) % 7;
+    startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - daysToSubtract);
     endDate = new Date(startDate);
     endDate.setDate(startDate.getDate() + 6);
     const sLabel = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });

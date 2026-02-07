@@ -52,8 +52,18 @@ export default function RecentTransactions({
               <tr key={idx} className="hover:bg-gray-50 transition">
                 <td className="px-3 sm:px-4 py-2 text-gray-600 whitespace-nowrap">
                   {transaction.date ? (() => {
-                    const [year, month, day] = transaction.date.split("-");
-                    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day)).toLocaleDateString();
+                    // Handle both MM/DD/YYYY and YYYY-MM-DD formats
+                    let dateObj: Date;
+                    if (transaction.date.includes("/")) {
+                      // MM/DD/YYYY format
+                      const [mm, dd, yyyy] = transaction.date.split("/");
+                      dateObj = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+                    } else {
+                      // YYYY-MM-DD format
+                      const [year, month, day] = transaction.date.split("-");
+                      dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                    }
+                    return dateObj.toLocaleDateString();
                   })() : ""}
                 </td>
                 <td className="px-3 sm:px-4 py-2 text-gray-900 max-w-xs truncate">

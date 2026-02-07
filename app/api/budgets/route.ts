@@ -17,7 +17,7 @@ export async function GET() {
 
     const budgets = await getBudgets(entry.sheetId);
 
-    return NextResponse.json({ budgets });
+    return NextResponse.json({ budgets, sheetId: entry.sheetId });
   } catch (error) {
     console.error("Error fetching budgets:", error);
     return NextResponse.json(

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import DashboardLayout from "@/app/ui/dashboard/layout";
 import { Transaction } from "@/app/lib/google-sheets";
+import EditableTransactionsTable from "@/app/ui/upload/editable-transactions-table";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -286,9 +287,14 @@ export default function UploadPage() {
         {/* Preview Results */}
         {showPreview && result && (
           <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">
-              Preview ({result.transactions.length} transactions found)
-            </h2>
+            <div className="mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
+                Preview & Edit Transactions
+              </h2>
+              <p className="text-xs sm:text-sm text-gray-600">
+                Click any cell to edit. You can modify values, add new rows, or remove incorrect entries before saving.
+              </p>
+            </div>
 
             {result.warnings && result.warnings.length > 0 && (
               <div className="mb-4 rounded-md bg-yellow-50 p-3 sm:p-4">
@@ -303,52 +309,12 @@ export default function UploadPage() {
               </div>
             )}
 
-            <div className="overflow-x-auto -mx-4 sm:mx-0">
-              <table className="min-w-full border border-gray-200 text-xs sm:text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-2 sm:px-4 py-2 text-left font-medium text-gray-700 border">
-                      Date
-                    </th>
-                    <th className="px-2 sm:px-4 py-2 text-left font-medium text-gray-700 border">
-                      Description
-                    </th>
-                    <th className="px-2 sm:px-4 py-2 text-right font-medium text-gray-700 border">
-                      Amount
-                    </th>
-                    <th className="px-2 sm:px-4 py-2 text-left font-medium text-gray-700 border hidden sm:table-cell">
-                      Category
-                    </th>
-                    <th className="px-2 sm:px-4 py-2 text-left font-medium text-gray-700 border hidden md:table-cell">
-                      Card
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.transactions.map(
-                    (transaction: Transaction, idx: number) => (
-                      <tr key={idx} className="border hover:bg-gray-50">
-                        <td className="px-2 sm:px-4 py-2 text-gray-700">
-                          {transaction.date}
-                        </td>
-                        <td className="px-2 sm:px-4 py-2 text-gray-700 truncate">
-                          {transaction.description}
-                        </td>
-                        <td className="px-2 sm:px-4 py-2 text-right text-gray-700 whitespace-nowrap">
-                          ${transaction.amount.toFixed(2)}
-                        </td>
-                        <td className="px-2 sm:px-4 py-2 text-gray-700 hidden sm:table-cell text-xs sm:text-sm">
-                          {transaction.category}
-                        </td>
-                        <td className="px-2 sm:px-4 py-2 text-gray-700 hidden md:table-cell text-xs sm:text-sm">
-                          {transaction.creditCard}
-                        </td>
-                      </tr>
-                    )
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <EditableTransactionsTable
+              transactions={result.transactions}
+              onTransactionsChange={(updatedTransactions) => {
+                setResult({ ...result, transactions: updatedTransactions });
+              }}
+            />
 
             <div className="mt-6 flex gap-3 sm:gap-4 flex-col sm:flex-row">
                 <div className="flex-1">
