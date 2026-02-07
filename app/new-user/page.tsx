@@ -91,7 +91,16 @@ export default function NewUserPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-0">
         <div className="bg-white rounded-lg shadow p-6 mt-6">
           <h1 className="text-lg sm:text-xl font-bold mb-4">New User Setup</h1>
-          <p className="text-sm text-gray-600">Follow the manual flow below to create a copy of the template in your own Google Drive, share it with the service account, then paste the copied sheet ID here to register it with this app.</p>
+          <p className="text-sm text-gray-600">
+            Follow the manual flow below to create a copy of the template in your own Google Drive, 
+            share it with the service account, 
+            then paste the copied sheet ID here to register it with this app.
+            The Sheet ID is the gibberish in the URL between /d/ and /edit, 
+          </p>
+          <br></br>
+          <p className="text-sm text-gray-600">
+            For example: the Sheet ID is bold in<br></br>https://docs.google.com/spreadsheets/d/<b>1aBcD_EfgHiJkLmNoPqRsTuVwXyZ1234567890</b>/edit.
+          </p>
 
           <div className="mt-4 space-y-3">
             <div>
