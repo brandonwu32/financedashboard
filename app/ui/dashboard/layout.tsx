@@ -2,7 +2,8 @@
 
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { ShieldCheckIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
 
 export default function DashboardLayout({
   children,
@@ -11,6 +12,30 @@ export default function DashboardLayout({
 }) {
   const { data: session } = useSession();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    // Check if user is admin
+    const checkAdminStatus = async () => {
+      try {
+        const response = await fetch('/api/admin/pending-requests');
+        if (response.ok) {
+          const data = await response.json();
+          setIsAdmin(true);
+          setPendingCount(data.requests?.length || 0);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (error) {
+        setIsAdmin(false);
+      }
+    };
+
+    checkAdminStatus();
+    const interval = setInterval(checkAdminStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -99,6 +124,32 @@ export default function DashboardLayout({
             >
               Settings
             </Link>
+            
+            {isAdmin && (
+              <>
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs font-semibold text-gray-500">
+                    <ShieldCheckIcon className="w-4 h-4" />
+                    Admin
+                  </div>
+                </div>
+                <Link
+                  href="/admin/pending-requests"
+                  className="block relative px-3 sm:px-4 py-2 rounded hover:bg-blue-50 text-gray-700 hover:text-blue-600 transition text-sm sm:text-base"
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <div className="flex items-center gap-2">
+                    <ClipboardDocumentListIcon className="w-5 h-5" />
+                    Pending Requests
+                  </div>
+                  {pendingCount > 0 && (
+                    <span className="absolute top-1 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                      {pendingCount}
+                    </span>
+                  )}
+                </Link>
+              </>
+            )}
           </nav>
         </aside>
 

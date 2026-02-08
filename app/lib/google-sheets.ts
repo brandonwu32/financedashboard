@@ -11,6 +11,41 @@ export interface Transaction {
   notes?: string;
 }
 
+// Cache for registry data to avoid excessive API calls
+interface RegistryCache {
+  data: Map<string, RegistryEntry | null>;
+  lastFetch: number;
+  ttl: number; // Time to live in milliseconds
+}
+
+export interface RegistryEntry {
+  email: string;
+  sheetId: string;
+  status: string; // 'Active', 'Inactive', 'Pending', 'Rejected'
+  createdAt: string;
+  access: string; // 'Admin', 'User'
+  notes: string;
+}
+
+export interface AccessRequest {
+  email: string;
+  status: string; // 'Pending', 'Approved', 'Rejected'
+  requestedAt: string;
+  notes: string;
+}
+
+const registryCache: RegistryCache = {
+  data: new Map(),
+  lastFetch: 0,
+  ttl: 1 * 60 * 1000, // 1 minute cache
+};
+
+// Clear cache helper
+export function clearRegistryCache() {
+  registryCache.data.clear();
+  registryCache.lastFetch = 0;
+}
+
 // Initialize Google Sheets API with service account
 export function getGoogleSheetsClient() {
   // Handle the private key - convert escaped newlines to actual newlines
@@ -101,30 +136,54 @@ export async function shareFileWithUser(fileId: string, userEmail: string) {
 }
 
 // Registry helpers: store mapping in a central registry sheet
-export async function getRegistryEntry(email: string) {
+export async function getRegistryEntry(email: string, useCache = true): Promise<RegistryEntry | null> {
   try {
+    // Check cache first
+    if (useCache) {
+      const now = Date.now();
+      if (now - registryCache.lastFetch < registryCache.ttl && registryCache.data.has(email)) {
+        return registryCache.data.get(email) || null;
+      }
+    }
+
     const sheets = getGoogleSheetsClient();
     const registryId = process.env.USER_REGISTRY_SPREADSHEET_ID;
     if (!registryId) return null;
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: registryId,
-      range: "registry!A2:E",
+      range: "registry!A2:F",
     } as any);
 
     const rows = response.data.values || [];
     for (const row of rows) {
       const rowEmail = (row[0] || '').toString().trim();
       if (rowEmail.toLowerCase() === email.toLowerCase()) {
-        return {
+        const entry: RegistryEntry = {
           email: rowEmail,
           sheetId: row[1] || '',
-          status: row[2] || '',
+          status: row[2] || 'Inactive',
           createdAt: row[3] || '',
-          notes: row[4] || '',
+          access: row[4] || 'User',
+          notes: row[5] || '',
         };
+        
+        // Cache the result
+        if (useCache) {
+          registryCache.data.set(email, entry);
+          registryCache.lastFetch = Date.now();
+        }
+        
+        return entry;
       }
     }
+    
+    // Cache null result to avoid repeated API calls for non-existent users
+    if (useCache) {
+      registryCache.data.set(email, null);
+      registryCache.lastFetch = Date.now();
+    }
+    
     return null;
   } catch (error) {
     console.error('Error reading registry entry:', error);
@@ -132,7 +191,7 @@ export async function getRegistryEntry(email: string) {
   }
 }
 
-export async function addRegistryEntry(email: string, sheetId: string, status = 'created', notes = '') {
+export async function addRegistryEntry(email: string, sheetId: string, status = 'Inactive', access = 'User', notes = '') {
   try {
     const sheets = getGoogleSheetsClient();
     const registryId = process.env.USER_REGISTRY_SPREADSHEET_ID;
@@ -141,16 +200,257 @@ export async function addRegistryEntry(email: string, sheetId: string, status = 
     const now = new Date().toISOString();
     await sheets.spreadsheets.values.append({
       spreadsheetId: registryId,
-      range: 'registry!A:E',
+      range: 'registry!A:F',
       valueInputOption: 'RAW',
       requestBody: {
-        values: [[email, sheetId, status, now, notes]],
+        values: [[email, sheetId, status, now, access, notes]],
       },
     } as any);
+    
+    // Clear cache for this user
+    registryCache.data.delete(email);
+    
     return true;
   } catch (error) {
     console.error('Error adding registry entry:', error);
     throw error;
+  }
+}
+
+// Update registry entry status (e.g., from Inactive to Active after onboarding)
+export async function updateRegistryStatus(email: string, status: string, notes?: string) {
+  try {
+    const sheets = getGoogleSheetsClient();
+    const registryId = process.env.USER_REGISTRY_SPREADSHEET_ID;
+    if (!registryId) throw new Error('USER_REGISTRY_SPREADSHEET_ID not configured');
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: registryId,
+      range: "registry!A2:F",
+    } as any);
+
+    const rows = response.data.values || [];
+    for (let i = 0; i < rows.length; i++) {
+      const rowEmail = (rows[i][0] || '').toString().trim();
+      if (rowEmail.toLowerCase() === email.toLowerCase()) {
+        const rowNumber = i + 2; // +2 because we start from A2
+        
+        // Update status
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: registryId,
+          range: `registry!C${rowNumber}`,
+          valueInputOption: 'RAW',
+          requestBody: {
+            values: [[status]],
+          },
+        } as any);
+        
+        // Update notes if provided
+        if (notes !== undefined) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: registryId,
+            range: `registry!F${rowNumber}`,
+            valueInputOption: 'RAW',
+            requestBody: {
+              values: [[notes]],
+            },
+          } as any);
+        }
+        
+        // Clear cache for this user
+        registryCache.data.delete(email);
+        
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error updating registry status:', error);
+    throw error;
+  }
+}
+
+// Update registry entry with new sheetId and status
+export async function updateRegistrySheetId(email: string, sheetId: string, status?: string, access?: string, notes?: string) {
+  try {
+    const sheets = getGoogleSheetsClient();
+    const registryId = process.env.USER_REGISTRY_SPREADSHEET_ID;
+    if (!registryId) throw new Error('USER_REGISTRY_SPREADSHEET_ID not configured');
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: registryId,
+      range: "registry!A2:F",
+    } as any);
+
+    const rows = response.data.values || [];
+    for (let i = 0; i < rows.length; i++) {
+      const rowEmail = (rows[i][0] || '').toString().trim();
+      if (rowEmail.toLowerCase() === email.toLowerCase()) {
+        const rowNumber = i + 2; // +2 because we start from A2
+        
+        // Prepare batch update
+        const updates: any[] = [];
+        
+        // Update sheetId
+        updates.push({
+          range: `registry!B${rowNumber}`,
+          values: [[sheetId]],
+        });
+        
+        // Update status if provided
+        if (status !== undefined) {
+          updates.push({
+            range: `registry!C${rowNumber}`,
+            values: [[status]],
+          });
+        }
+        
+        // Update access if provided
+        if (access !== undefined) {
+          updates.push({
+            range: `registry!E${rowNumber}`,
+            values: [[access]],
+          });
+        }
+        
+        // Update notes if provided
+        if (notes !== undefined) {
+          updates.push({
+            range: `registry!F${rowNumber}`,
+            values: [[notes]],
+          });
+        }
+        
+        // Execute batch update
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: registryId,
+          requestBody: {
+            valueInputOption: 'RAW',
+            data: updates,
+          },
+        } as any);
+        
+        // Clear cache for this user
+        registryCache.data.delete(email);
+        
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error updating registry sheetId:', error);
+    throw error;
+  }
+}
+
+// Access request helpers for the "requests" tab
+export async function addAccessRequest(email: string, notes = '') {
+  try {
+    const sheets = getGoogleSheetsClient();
+    const registryId = process.env.USER_REGISTRY_SPREADSHEET_ID;
+    if (!registryId) throw new Error('USER_REGISTRY_SPREADSHEET_ID not configured');
+
+    const now = new Date().toISOString();
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: registryId,
+      range: 'requests!A:D',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [[email, 'Pending', now, notes]],
+      },
+    } as any);
+    
+    return true;
+  } catch (error) {
+    console.error('Error adding access request:', error);
+    throw error;
+  }
+}
+
+export async function getAccessRequest(email: string): Promise<AccessRequest | null> {
+  try {
+    const sheets = getGoogleSheetsClient();
+    const registryId = process.env.USER_REGISTRY_SPREADSHEET_ID;
+    if (!registryId) return null;
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: registryId,
+      range: "requests!A2:D",
+    } as any);
+
+    const rows = response.data.values || [];
+    for (const row of rows) {
+      const rowEmail = (row[0] || '').toString().trim();
+      if (rowEmail.toLowerCase() === email.toLowerCase()) {
+        return {
+          email: rowEmail,
+          status: row[1] || 'Pending',
+          requestedAt: row[2] || '',
+          notes: row[3] || '',
+        };
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('Error reading access request:', error);
+    return null;
+  }
+}
+
+// Check if user has access based on registry status
+export async function checkUserAccess(email: string): Promise<{
+  hasAccess: boolean;
+  status: string;
+  isOnboarded: boolean;
+  isAdmin: boolean;
+}> {
+  try {
+    const entry = await getRegistryEntry(email, true);
+    
+    if (!entry) {
+      return { hasAccess: false, status: 'Not Found', isOnboarded: false, isAdmin: false };
+    }
+    
+    // User has access if status is 'Active' or 'Inactive'
+    // 'Active' = onboarded with sheet created
+    // 'Inactive' = approved but not yet onboarded
+    const hasAccess = entry.status === 'Active' || entry.status === 'Inactive';
+    const isOnboarded = entry.status === 'Active' && !!entry.sheetId;
+    const isAdmin = entry.access === 'Admin';
+    
+    return { hasAccess, status: entry.status, isOnboarded, isAdmin };
+  } catch (error) {
+    console.error('Error checking user access:', error);
+    return { hasAccess: false, status: 'Error', isOnboarded: false, isAdmin: false };
+  }
+}
+
+// Get all pending access requests (admin function)
+export async function getPendingRequests(): Promise<AccessRequest[]> {
+  try {
+    const sheets = getGoogleSheetsClient();
+    const registryId = process.env.USER_REGISTRY_SPREADSHEET_ID;
+    if (!registryId) return [];
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: registryId,
+      range: "requests!A2:D",
+    } as any);
+
+    const rows = response.data.values || [];
+    return rows
+      .filter(row => row[1] === 'Pending')
+      .map(row => ({
+        email: row[0] || '',
+        status: row[1] || 'Pending',
+        requestedAt: row[2] || '',
+        notes: row[3] || '',
+      }));
+  } catch (error) {
+    console.error('Error reading pending requests:', error);
+    return [];
   }
 }
 

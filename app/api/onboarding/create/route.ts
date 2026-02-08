@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/app/auth';
-import { getRegistryEntry, copyTemplateSpreadsheet, shareFileWithUser, addRegistryEntry, verifySpreadsheetStructure } from '@/app/lib/google-sheets';
+import { getRegistryEntry, copyTemplateSpreadsheet, shareFileWithUser, addRegistryEntry, verifySpreadsheetStructure, updateRegistrySheetId, checkUserAccess } from '@/app/lib/google-sheets';
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,13 +8,15 @@ export async function POST(request: NextRequest) {
     const email = session?.user?.email;
     if (!email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const allowedEmails = (process.env.ALLOWED_EMAILS || '').split(',').map(s => s.trim()).filter(Boolean);
-    const allowed = allowedEmails.length === 0 ? true : allowedEmails.includes(email);
-    if (!allowed) return NextResponse.json({ error: 'Not allowed' }, { status: 403 });
+    // Check if user has access via registry
+    const access = await checkUserAccess(email);
+    if (!access.hasAccess) {
+      return NextResponse.json({ error: 'Not allowed - request access first' }, { status: 403 });
+    }
 
-    // If registry exists and verified, return existing
+    // If registry exists with Active status and verified, return existing
     const existing = await getRegistryEntry(email);
-    if (existing && existing.sheetId) {
+    if (existing && existing.sheetId && existing.status === 'Active') {
       // verify structure
       const v = await verifySpreadsheetStructure(existing.sheetId);
       if (v.ok) return NextResponse.json({ sheetId: existing.sheetId });
@@ -32,17 +34,18 @@ export async function POST(request: NextRequest) {
     // Share with user
     await shareFileWithUser(newId, email);
 
-    // Add to registry
-    await addRegistryEntry(email, newId, 'created', 'created by onboarding');
+    // If user already has an entry, update it with the new sheetId; otherwise add new entry
+    if (existing) {
+      await updateRegistrySheetId(email, newId, 'Active', undefined, 'onboarded and sheet created');
+    } else {
+      await addRegistryEntry(email, newId, 'Active', 'User', 'onboarded and sheet created');
+    }
 
     // Verify
     const v = await verifySpreadsheetStructure(newId);
     if (!v.ok) {
       return NextResponse.json({ error: 'Sheet created but verification failed', details: v }, { status: 500 });
     }
-
-    // Update registry to verified (append additional row for now)
-    await addRegistryEntry(email, newId, 'verified', 'auto-verified');
 
     return NextResponse.json({ sheetId: newId });
   } catch (err) {

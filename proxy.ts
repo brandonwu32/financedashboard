@@ -1,14 +1,19 @@
 import { auth } from "@/app/auth";
 import { NextRequest, NextResponse } from "next/server";
+import { checkUserAccess } from "@/app/lib/google-sheets";
 
 export async function proxy(request: NextRequest) {
   const session = await auth();
-  const allowedEmails = (process.env.ALLOWED_EMAILS || "").split(",").map(email => email.trim());
-
   const pathname = request.nextUrl.pathname;
 
-  // Allow access to login, auth routes, and unauthorized page without authentication
-  if (pathname.startsWith("/login") || pathname.startsWith("/api/auth") || pathname === "/" || pathname === "/unauthorized") {
+  // Allow access to login, auth routes, unauthorized page, and access-request API without authentication
+  if (
+    pathname.startsWith("/login") || 
+    pathname.startsWith("/api/auth") || 
+    pathname === "/" || 
+    pathname === "/unauthorized" ||
+    pathname.startsWith("/api/access-request")
+  ) {
     return NextResponse.next();
   }
 
@@ -17,12 +22,21 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Check if user's email is in the allowlist
-  if (!allowedEmails.includes(session.user.email)) {
+  // Check if user has access via registry
+  try {
+    const access = await checkUserAccess(session.user.email);
+    
+    if (!access.hasAccess) {
+      return NextResponse.redirect(new URL("/unauthorized", request.url));
+    }
+
+    // User has access, continue
+    return NextResponse.next();
+  } catch (error) {
+    console.error("Error checking user access:", error);
+    // On error, redirect to unauthorized page for safety
     return NextResponse.redirect(new URL("/unauthorized", request.url));
   }
-
-  return NextResponse.next();
 }
 
 export const config = {
