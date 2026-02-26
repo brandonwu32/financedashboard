@@ -45,12 +45,5 @@ This repository is a personal finance dashboard and expense tracker built with N
 - Scalable parsing: Offload heavy image parsing to background workers or serverless functions with a queue (e.g., Redis + BullMQ) and add retries and monitoring.
 - Rate limiting & quotas: Implement per-user rate limits for AI calls and file uploads, with clear UI feedback.
 
-**If you want me to do more**
-- I can add server-side validation schemas (Zod) to harden inputs and dedupe transactions on append.
-- I can implement file-size checks and basic per-user rate limiting on the parse endpoint.
-- I can prepare CI steps for secret scanning and dependency audits.
-
-If you want this repo simplified further (for example remove `archive/` or rework the Google Sheets integration into a database), tell me which direction to take.
-
 ---
 Last update: February 6, 2026
