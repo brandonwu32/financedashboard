@@ -3,7 +3,16 @@
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { ShieldCheckIcon, ClipboardDocumentListIcon, CurrencyDollarIcon } from "@heroicons/react/24/outline";
+import {
+  ShieldCheckIcon,
+  ClipboardDocumentListIcon,
+  CreditCardIcon,
+  HomeIcon,
+  ArrowUpTrayIcon,
+  PlusCircleIcon,
+  ReceiptRefundIcon,
+  Cog6ToothIcon,
+} from "@heroicons/react/24/outline";
 
 export default function DashboardLayout({
   children,
@@ -67,7 +76,7 @@ export default function DashboardLayout({
               </svg>
             </button>
             <Link href="/dashboard" className="text-lg sm:text-xl font-bold text-gray-900 ml-0 md:mt-1">
-              FinanceTracker
+              Finance Tracker
             </Link>
           </div>
 
@@ -106,35 +115,58 @@ export default function DashboardLayout({
               className="block px-3 sm:px-4 py-2 rounded hover:bg-blue-50 text-gray-700 hover:text-blue-600 transition text-sm sm:text-base"
               onClick={() => setSidebarOpen(false)}
             >
-              Dashboard
+              <div className="flex items-center gap-2">
+                <HomeIcon className="w-5 h-5" />
+                Dashboard
+              </div>
             </Link>
             <Link
               href="/upload"
               className="block px-3 sm:px-4 py-2 rounded hover:bg-blue-50 text-gray-700 hover:text-blue-600 transition text-sm sm:text-base"
               onClick={() => setSidebarOpen(false)}
             >
-              Upload Statements
+              <div className="flex items-center gap-2">
+                <ArrowUpTrayIcon className="w-5 h-5" />
+                Upload Statements
+              </div>
             </Link>
             <Link
               href="/add"
               className="block px-3 sm:px-4 py-2 rounded hover:bg-blue-50 text-gray-700 hover:text-blue-600 transition text-sm sm:text-base"
               onClick={() => setSidebarOpen(false)}
             >
-              Add Expense
+              <div className="flex items-center gap-2">
+                <PlusCircleIcon className="w-5 h-5" />
+                Add Expense
+              </div>
             </Link>
             <Link
               href="/reimbursements"
               className="block px-3 sm:px-4 py-2 rounded hover:bg-blue-50 text-gray-700 hover:text-blue-600 transition text-sm sm:text-base"
               onClick={() => setSidebarOpen(false)}
             >
-              Reimbursements
+              <div className="flex items-center gap-2">
+                <ReceiptRefundIcon className="w-5 h-5" />
+                Reimbursements
+              </div>
+            </Link>
+            <Link
+              href="/payment-methods"
+              className="block px-3 sm:px-4 py-2 rounded hover:bg-blue-50 text-gray-700 hover:text-blue-600 transition text-sm sm:text-base flex items-center gap-2"
+              onClick={() => setSidebarOpen(false)}
+            >
+              <CreditCardIcon className="w-4 h-4" />
+              Payment Methods
             </Link>
             <Link
               href="/settings"
               className="block px-3 sm:px-4 py-2 rounded hover:bg-blue-50 text-gray-700 hover:text-blue-600 transition text-sm sm:text-base"
               onClick={() => setSidebarOpen(false)}
             >
-              Settings
+              <div className="flex items-center gap-2">
+                <Cog6ToothIcon className="w-5 h-5" />
+                Settings
+              </div>
             </Link>
             
             {mounted && isAdmin && (
