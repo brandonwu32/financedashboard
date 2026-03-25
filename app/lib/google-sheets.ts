@@ -2,6 +2,7 @@ import { google } from "googleapis";
 import { JWT } from "google-auth-library";
 
 export interface Transaction {
+  rowNumber?: number;
   date: string;
   description: string;
   amount: number;
@@ -506,7 +507,7 @@ export async function verifySpreadsheetStructure(spreadsheetId: string) {
 }
 
 export async function readTransactionsFromSheet(
-  range: string = "'Spending'!A2:E",
+  range: string = "'Spending'!A2:F",
   spreadsheetIdOverride?: string
 ) {
   try {
@@ -520,13 +521,14 @@ export async function readTransactionsFromSheet(
 
     const rows = response.data.values || [];
     return rows
-      .filter((row) => {
+      .map((row, rowIndex) => ({ row, rowNumber: rowIndex + 2 }))
+      .filter(({ row }) => {
         // Skip header rows - check if first column looks like a date (Mon day format)
         const firstCell = (row[0] || "").toString().trim();
         const headerPatterns = ["Range", "Date", "range", "date"];
         return !headerPatterns.includes(firstCell);
       })
-      .map((row) => {
+      .map(({ row, rowNumber }) => {
         // Convert date to "YYYY-MM-DD" format
         // Handles both "Jan 10" and "1/10/2026" formats
         const dateStr = row[0] || "";
@@ -646,6 +648,7 @@ export async function readTransactionsFromSheet(
         const reimbursable = reimbursableValue === "true" || reimbursableValue === "yes" || reimbursableValue === "1";
 
         return {
+          rowNumber,
           date: outDate,
           amount: parseFloat(row[1]?.replace("$", "").replace(",", "")) || 0,
           category: row[2] || "",
@@ -752,38 +755,80 @@ export async function updateTransactionReimbursableFlag(
     });
 
     const rows = response.data.values || [];
-    
-    // Find the row index that matches the transaction
+
+    // 1) Prefer exact row number from client payload (most reliable after sorting/filtering UI)
+    if (typeof transaction.rowNumber === "number" && Number.isFinite(transaction.rowNumber) && transaction.rowNumber >= 2) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'Spending'!F${transaction.rowNumber}`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [[reimbursable ? "TRUE" : "FALSE"]],
+        },
+      });
+
+      return { success: true, updated: true, rowNumber: transaction.rowNumber };
+    }
+
+    const normalizeToISO = (value: string): string => {
+      const s = (value || "").toString().trim();
+      if (!s) return "";
+
+      const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if (mdy) {
+        let [, m, d, y] = mdy;
+        if (y.length === 2) y = String(2000 + Number(y));
+        return `${y}-${String(Number(m)).padStart(2, "0")}-${String(Number(d)).padStart(2, "0")}`;
+      }
+
+      const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (ymd) {
+        const [, y, m, d] = ymd;
+        return `${y}-${String(Number(m)).padStart(2, "0")}-${String(Number(d)).padStart(2, "0")}`;
+      }
+
+      const parsed = new Date(s);
+      if (!isNaN(parsed.getTime())) {
+        const y = parsed.getFullYear();
+        const m = String(parsed.getMonth() + 1).padStart(2, "0");
+        const d = String(parsed.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+
+      return s;
+    };
+
+    const targetDate = normalizeToISO(transaction.date || "");
+    const targetAmount = Number(transaction.amount) || 0;
+
+    // 2) Fallback matching by normalized date + amount + description (+ card/category when present)
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       if (!row[0]) continue;
 
-      // Parse the date from the row
-      const dateStr = row[0]?.toString().trim() || "";
-      const amountStr = row[1]?.toString().replace("$", "").replace(",", "").trim() || "";
-      const description = row[3]?.toString().trim() || "";
+      const rowDate = normalizeToISO((row[0] || "").toString());
+      const rowAmount = parseFloat(((row[1] || "").toString().replace(/[$,]/g, "").trim())) || 0;
+      const rowCategory = (row[2] || "").toString().trim();
+      const rowDescription = (row[3] || "").toString().trim();
+      const rowCard = (row[4] || "").toString().trim();
 
-      const rowAmount = parseFloat(amountStr) || 0;
-      
-      // Match by date, amount, and description
-      if (
-        dateStr === transaction.date &&
-        Math.abs(rowAmount - transaction.amount) < 0.01 &&
-        description === transaction.description
-      ) {
-        // Found the matching row, update column F (reimbursable)
-        const rowNumber = i + 2; // +2 because we start from row 2 (A2)
-        
+      const matchesCore = rowDate === targetDate && Math.abs(rowAmount - targetAmount) < 0.01 && rowDescription === (transaction.description || "");
+      const matchesCategory = !transaction.category || rowCategory === transaction.category;
+      const matchesCard = !transaction.creditCard || rowCard === transaction.creditCard;
+
+      if (matchesCore && matchesCategory && matchesCard) {
+        const rowNumber = i + 2; // +2 because API range starts from A2
+
         await sheets.spreadsheets.values.update({
           spreadsheetId,
           range: `'Spending'!F${rowNumber}`,
           valueInputOption: "RAW",
           requestBody: {
-            values: [[reimbursable ? "TRUE" : "FALSE"]],
+            values: [[reimbursable ? true : false]],
           },
         });
 
-        return { success: true, updated: true };
+        return { success: true, updated: true, rowNumber };
       }
     }
 

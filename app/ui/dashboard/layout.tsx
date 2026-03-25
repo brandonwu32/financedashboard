@@ -14,6 +14,11 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     // Check if user is admin
@@ -132,7 +137,7 @@ export default function DashboardLayout({
               Settings
             </Link>
             
-            {isAdmin && (
+            {mounted && isAdmin && (
               <>
                 <div className="mt-4 pt-4 border-t border-gray-200">
                   <div className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs font-semibold text-gray-500">
