@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import { Transaction } from "@/app/lib/google-sheets";
-import { getCurrentSpendingPeriod, getCurrentPeriod, filterTransactionsBySpendingPeriod } from "@/app/lib/spending";
+import { getCurrentPeriod, filterTransactionsBySpendingPeriod } from "@/app/lib/spending";
 import { usePeriod } from "@/app/ui/dashboard/period-context";
 
 export default function ExpenseOverview({ transactions }: { transactions: Transaction[] }) {
@@ -20,6 +20,12 @@ export default function ExpenseOverview({ transactions }: { transactions: Transa
 
 	const txnCount = periodTx.length;
 	const avgTransaction = txnCount > 0 ? totalSpent / txnCount : 0;
+
+	// Calculate reimbursable amount for current period
+	const reimbursableAmount = useMemo(
+		() => periodTx.filter((t) => t.reimbursable).reduce((s, t) => s + (Number(t.amount) || 0), 0),
+		[periodTx]
+	);
 
 	// compute previous period by shifting current period by its length
 	const periodMs = current.endDate.getTime() - current.startDate.getTime() + 24 * 60 * 60 * 1000;
@@ -57,10 +63,10 @@ export default function ExpenseOverview({ transactions }: { transactions: Transa
 			</div>
 
 			<div className="bg-white rounded-lg shadow p-4 sm:p-6">
-				<h3 className="text-xs sm:text-sm font-medium text-gray-500">Average Transaction</h3>
+				<h3 className="text-xs sm:text-sm font-medium text-gray-500">Reimbursable Amount</h3>
 				<p className="text-xs sm:text-sm text-gray-500 mt-1">{current.label}</p>
-				<p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">${avgTransaction.toFixed(2)}</p>
-				<p className="text-xs sm:text-sm text-gray-600 mt-1">This period</p>
+				<p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">${reimbursableAmount.toFixed(2)}</p>
+				<p className="text-xs sm:text-sm text-gray-600 mt-1">Ready for reimbursement</p>
 			</div>
 
 			<div className="bg-white rounded-lg shadow p-4 sm:p-6">

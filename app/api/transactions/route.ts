@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not onboarded', onboarded: false }, { status: 403 });
     }
 
-    const transactions = await readTransactionsFromSheet("'Spending'!A2:E", entry.sheetId);
+    const transactions = await readTransactionsFromSheet("'Spending'!A2:F", entry.sheetId);
 
     return NextResponse.json({ transactions });
   } catch (error) {

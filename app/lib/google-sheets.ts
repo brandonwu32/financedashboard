@@ -9,6 +9,7 @@ export interface Transaction {
   creditCard: string;
   status?: string;
   notes?: string;
+  reimbursable?: boolean;
 }
 
 // Cache for registry data to avoid excessive API calls
@@ -640,6 +641,10 @@ export async function readTransactionsFromSheet(
 
         const outDate = fullDate ? formatISOToMMDDYYYY(fullDate) : (dateStr || '');
 
+        // Parse reimbursable field (column F, index 5)
+        const reimbursableValue = (row[5] || "").toString().trim().toLowerCase();
+        const reimbursable = reimbursableValue === "true" || reimbursableValue === "yes" || reimbursableValue === "1";
+
         return {
           date: outDate,
           amount: parseFloat(row[1]?.replace("$", "").replace(",", "")) || 0,
@@ -648,6 +653,7 @@ export async function readTransactionsFromSheet(
           creditCard: row[4] || "",
           status: "",
           notes: "",
+          reimbursable: reimbursable || false,
         };
       });
   } catch (error) {
@@ -711,11 +717,12 @@ export async function appendTransactionsToSheet(
       sanitizeCell(t.category),
       sanitizeCell(t.description),
       sanitizeCell(t.creditCard),
+      sanitizeCell(t.reimbursable ? "TRUE" : "FALSE"), // Column F: Reimbursable
     ]);
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: "'Spending'!A:E",
+      range: "'Spending'!A:F",
       valueInputOption: "USER_ENTERED",  // Let Google Sheets parse values
       requestBody: {
         values,
@@ -725,6 +732,65 @@ export async function appendTransactionsToSheet(
     return { success: true };
   } catch (error) {
     console.error("Error appending to Google Sheets:", error);
+    throw error;
+  }
+}
+
+export async function updateTransactionReimbursableFlag(
+  transaction: Transaction,
+  reimbursable: boolean,
+  spreadsheetIdOverride?: string
+) {
+  try {
+    const sheets = getGoogleSheetsClient();
+    const spreadsheetId = spreadsheetIdOverride || process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+
+    // Read all transactions to find the matching one
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "'Spending'!A2:F",
+    });
+
+    const rows = response.data.values || [];
+    
+    // Find the row index that matches the transaction
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row[0]) continue;
+
+      // Parse the date from the row
+      const dateStr = row[0]?.toString().trim() || "";
+      const amountStr = row[1]?.toString().replace("$", "").replace(",", "").trim() || "";
+      const description = row[3]?.toString().trim() || "";
+
+      const rowAmount = parseFloat(amountStr) || 0;
+      
+      // Match by date, amount, and description
+      if (
+        dateStr === transaction.date &&
+        Math.abs(rowAmount - transaction.amount) < 0.01 &&
+        description === transaction.description
+      ) {
+        // Found the matching row, update column F (reimbursable)
+        const rowNumber = i + 2; // +2 because we start from row 2 (A2)
+        
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `'Spending'!F${rowNumber}`,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [[reimbursable ? "TRUE" : "FALSE"]],
+          },
+        });
+
+        return { success: true, updated: true };
+      }
+    }
+
+    console.warn("Transaction not found for update:", transaction);
+    return { success: false, updated: false, error: "Transaction not found" };
+  } catch (error) {
+    console.error("Error updating transaction reimbursable flag:", error);
     throw error;
   }
 }

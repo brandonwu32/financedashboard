@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { ShieldCheckIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
+import { ShieldCheckIcon, ClipboardDocumentListIcon, CurrencyDollarIcon } from "@heroicons/react/24/outline";
 
 export default function DashboardLayout({
   children,
@@ -116,6 +116,13 @@ export default function DashboardLayout({
               onClick={() => setSidebarOpen(false)}
             >
               Add Expense
+            </Link>
+            <Link
+              href="/reimbursements"
+              className="block px-3 sm:px-4 py-2 rounded hover:bg-blue-50 text-gray-700 hover:text-blue-600 transition text-sm sm:text-base"
+              onClick={() => setSidebarOpen(false)}
+            >
+              Reimbursements
             </Link>
             <Link
               href="/settings"

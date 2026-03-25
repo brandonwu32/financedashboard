@@ -10,31 +10,58 @@ export interface SpendingPeriod {
   isCurrentPeriod: boolean;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_PAYDAY_ANCHOR = new Date(2026, 0, 30); // Friday anchor in the bi-weekly cycle
+
+function normalizeDate(date: Date): Date {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
+function getSaturdayAfterPayday(payday: Date): Date {
+  const paydayDate = normalizeDate(payday);
+  const saturday = new Date(paydayDate);
+
+  // If payday is Friday (5), start is next day (Saturday).
+  // Otherwise, move forward to the next Saturday.
+  const dayOfWeek = paydayDate.getDay();
+  const daysToAdd = dayOfWeek === 5 ? 1 : (6 - dayOfWeek + 7) % 7;
+  saturday.setDate(saturday.getDate() + daysToAdd);
+
+  return saturday;
+}
+
+function getCurrentBiweeklyWindow(lastPayday: Date = DEFAULT_PAYDAY_ANCHOR): { startDate: Date; endDate: Date } {
+  const today = normalizeDate(new Date());
+  const anchorStart = getSaturdayAfterPayday(lastPayday);
+
+  const diffDays = Math.floor((today.getTime() - anchorStart.getTime()) / DAY_MS);
+  const periodsFromAnchor = Math.floor(diffDays / 14);
+
+  const startDate = new Date(anchorStart);
+  startDate.setDate(anchorStart.getDate() + periodsFromAnchor * 14);
+
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + 13);
+
+  return { startDate, endDate };
+}
+
 /**
  * Get all bi-weekly periods relative to today
  * @param lastPayday Date of the last payday (Friday)
  * @returns Array of bi-weekly periods
  */
-export function getSpendingPeriods(lastPayday: Date = new Date(2026, 0, 30)): SpendingPeriod[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Calculate the Saturday after the last payday (start of current tracking period)
-  const lastPaydayDate = new Date(lastPayday);
-  lastPaydayDate.setHours(0, 0, 0, 0);
-  
-  const nextSaturday = new Date(lastPaydayDate);
-  // If lastPayday is Friday (5), next Saturday is +1 day
-  // If lastPayday is any other day, calculate accordingly
-  const dayOfWeek = lastPaydayDate.getDay();
-  const daysToAdd = dayOfWeek === 5 ? 1 : (6 - dayOfWeek + 7) % 7;
-  nextSaturday.setDate(nextSaturday.getDate() + daysToAdd);
+export function getSpendingPeriods(lastPayday: Date = DEFAULT_PAYDAY_ANCHOR): SpendingPeriod[] {
+  const today = normalizeDate(new Date());
+  const { startDate: currentStart } = getCurrentBiweeklyWindow(lastPayday);
 
   const periods: SpendingPeriod[] = [];
 
   // Generate periods: 2 in the past, current, and 2 in the future
   for (let i = -2; i <= 2; i++) {
-    const startDate = new Date(nextSaturday);
+    const startDate = new Date(currentStart);
     startDate.setDate(startDate.getDate() + i * 14);
 
     const endDate = new Date(startDate);
@@ -58,10 +85,14 @@ export function getSpendingPeriods(lastPayday: Date = new Date(2026, 0, 30)): Sp
 /**
  * Get the current bi-weekly period
  */
-export function getCurrentSpendingPeriod(lastPayday: Date = new Date(2026, 0, 30)): SpendingPeriod {
-  const periods = getSpendingPeriods(lastPayday);
-  const current = periods.find((p) => p.isCurrentPeriod);
-  return current || periods[2]; // Default to middle period if not found
+export function getCurrentSpendingPeriod(lastPayday: Date = DEFAULT_PAYDAY_ANCHOR): SpendingPeriod {
+  const { startDate, endDate } = getCurrentBiweeklyWindow(lastPayday);
+  return {
+    startDate,
+    endDate,
+    label: formatPeriodLabel(startDate, endDate),
+    isCurrentPeriod: true,
+  };
 }
 
 /**

@@ -2,12 +2,12 @@
 
 import React, { useMemo } from "react";
 import { Transaction } from "@/app/lib/google-sheets";
-import { getCurrentSpendingPeriod, filterTransactionsBySpendingPeriod } from "@/app/lib/spending";
+import { getCurrentPeriod, filterTransactionsBySpendingPeriod } from "@/app/lib/spending";
 import { usePeriod } from "@/app/ui/dashboard/period-context";
 
 export default function SpendingChart({ transactions }: { transactions: Transaction[] }) {
   const { periodType } = usePeriod();
-  const current = getCurrentSpendingPeriod();
+  const current = getCurrentPeriod(periodType as any);
   const periodTx = filterTransactionsBySpendingPeriod(transactions, current);
 
   const buckets = useMemo(() => {

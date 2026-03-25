@@ -7,6 +7,7 @@ import {
   PlusCircleIcon,
   ClipboardDocumentListIcon,
   ShieldCheckIcon,
+  CurrencyDollarIcon,
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
@@ -22,7 +23,10 @@ const primaryLinks = [
 ];
 
 // Action links (grouped separately in the sidebar)
-const actionLinks = [{ name: 'Add Expense', href: '/add', icon: PlusCircleIcon }];
+const actionLinks = [
+  { name: 'Add Expense', href: '/add', icon: PlusCircleIcon },
+  { name: 'Reimbursements', href: '/reimbursements', icon: CurrencyDollarIcon },
+];
 
 // Admin links (only shown to admins)
 const adminLinks = [

@@ -3,7 +3,6 @@
 import { Transaction } from "@/app/lib/google-sheets";
 import { useMemo, useEffect, useState } from "react";
 import {
-  getCurrentSpendingPeriod,
   getCurrentPeriod,
   filterTransactionsBySpendingPeriod,
   deriveBudgetForPeriod,
